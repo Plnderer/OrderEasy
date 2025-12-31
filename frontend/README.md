@@ -363,6 +363,12 @@ Top navigation bar with:
 - **Near Me:** Geolocation-based filtering (requires browser permission)
 - **Sorting:** By rating, name, or cuisine
 
+### Restaurant Details
+- **Info:** Operating hours, contact details, and location
+- **Rating:** Visual star rating badge
+- **Actions:** Quick access to Menu, Takeout, and Reservation
+- **Preview:** Popular items highlight
+
 ### Reservation Flow
 1. Select date, time, and party size
 2. View available tables
@@ -383,6 +389,15 @@ Top navigation bar with:
 - **Status Management:** Update order status (preparing, ready, completed)
 - **Order Details:** View items, special instructions, table number
 - **Color-Coded:** Visual distinction between order statuses
+
+#### Yukon Text Commands (MVP)
+Yukon supports text-based kitchen commands from the Kitchen Dashboard chat. Commands require a short confirmation step. Examples:
+- `Start order 37` → prepares Order #37 (confirmation required)
+- `Mark order 38 as ready` → sets Order #38 to `ready`
+- `Cancel order 41` → cancels Order #41
+- `Log 2 cases of tomatoes` → logs inventory (updated in-dashboard inventory state)
+
+Confirmation is required for destructive or state-changing commands — reply `Yes` to confirm or `No` to cancel. Yukon will reflect updates via the existing order socket events and the inventory change is applied immediately to the dashboard state.
 
 ### Admin Panel
 - **Statistics:** Total restaurants, tables, active orders

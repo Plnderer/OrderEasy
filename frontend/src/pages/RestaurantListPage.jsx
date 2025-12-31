@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
-  StarIcon,
   ClockIcon,
   MapPinIcon
 } from '@heroicons/react/24/outline';
+
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import Logo from '../components/Logo';
+import OrderEasyImg from '../assets/ordereasyrestaurant.jpeg';
+import McFoodImg from '../assets/mcfood.jpeg';
+import backgroundImg from '../assets/background.png';
+
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-
 
 /**
  * RestaurantListPage Component
@@ -82,7 +84,9 @@ const RestaurantListPage = () => {
       rating: Number(r.rating || 0).toFixed(1),
       deliveryTime: '',
       distance: typeof r.distance_km === 'number' ? `${Number(r.distance_km).toFixed(1)} km` : '',
-      image: '',
+      image: r.cover_image_url
+        ? (r.cover_image_url.startsWith('http') ? r.cover_image_url : `${API_URL}${r.cover_image_url}`)
+        : '',
       source: 'api',
       priceRange: '$$'
     }));
@@ -138,21 +142,9 @@ const RestaurantListPage = () => {
     <div className="min-h-screen relative overflow-hidden bg-[#000000] pt-24 pb-28">
       {/* BACKGROUND GRADIENT */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none bg-cover bg-center bg-no-repeat opacity-60"
         style={{
-          background: `
-            radial-gradient(circle at center,
-              #E35504ff 0%,
-              #E35504aa 15%,
-              #000000 35%,
-              #5F2F14aa 55%,
-              #B5FF00ff 80%,
-              #000000 100%
-            )
-          `,
-          filter: "blur(40px)",
-          backgroundSize: "180% 180%",
-          opacity: 0.55,
+          backgroundImage: `url(${backgroundImg})`,
         }}
       ></div>
 
@@ -335,17 +327,31 @@ const RestaurantListPage = () => {
                 "
               >
                 {/* Image Section */}
-                <div className="bg-dark-surface h-48 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-8xl transform group-hover:scale-110 transition-transform duration-300">
-                    {restaurant.image}
-                  </span>
-
-                  {/* Distance badge (when Near Me filter used) */}
-                  {restaurant.distance && (
-                    <div className="absolute top-3 left-3 bg-dark-card/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-text-primary">
-                      {restaurant.distance}
+                <div className="relative h-48 w-full overflow-hidden rounded-t-xl">
+                  {restaurant.image ? (
+                    <img
+                      src={restaurant.image}
+                      alt={restaurant.name}
+                      className="w-full h-full object-cover object-top transform group-hover:scale-110 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                      <span className="text-4xl">🍽️</span>
                     </div>
                   )}
+
+                  <div className="absolute bottom-0 left-0 w-full h-28 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+
+
+
+                  {/* Distance badge (when Near Me filter used) */}
+                  {
+                    restaurant.distance && (
+                      <div className="absolute top-3 left-3 bg-dark-card/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-text-primary">
+                        {restaurant.distance}
+                      </div>
+                    )
+                  }
 
                   {/* Rating badge */}
                   <div className="absolute top-3 right-3 bg-dark-card/90 backdrop-blur-sm px-3 py-2 rounded-full flex items-center gap-1">
@@ -354,7 +360,7 @@ const RestaurantListPage = () => {
                       {restaurant.rating}
                     </span>
                   </div>
-                </div>
+                </div >
 
                 {/* Content Section */}
                 <div className="p-6">
@@ -390,33 +396,33 @@ const RestaurantListPage = () => {
                       <MapPinIcon className="w-4 h-4" />
                     </div>
                   </div>
-
-                  {/* View Details Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/restaurant/${restaurant.id}`);
-                    }}
-                    className="
-                      w-full
-                      bg-brand-lime text-dark-bg
-                      px-6 py-3 rounded-full
-                      font-bold
-                      hover:bg-brand-lime/90
-                      transform group-hover:scale-105
-                      transition-all duration-200
-                      shadow-lg shadow-brand-lime/20
-                    "
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
+                      {/* View Details Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/restaurant/${restaurant.id}`);
+                      }}
+                      className="
+                        w-full
+                        bg-brand-lime text-dark-bg
+                        px-6 py-3 rounded-full
+                        font-bold
+                        hover:bg-brand-lime/90
+                        group-hover:scale-105
+                        transform
+                        transition-all duration-200
+                        shadow-lg shadow-brand-lime/20
+                      "
+                    >
+                      View Details
+                    </button>
+                </div >
+              </div >
             ))}
-          </div>
+          </div >
         )}
 
-      </div>
+      </div >
     </div >
   );
 };

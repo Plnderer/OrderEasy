@@ -1,13 +1,27 @@
 const orderService = require('../services/order.service');
 const logger = require('../utils/logger');
 const OrderDTO = require('../dtos/order.dto');
+const PublicOrderDTO = require('../dtos/order.public.dto');
+
+function isStaffRequest(req) {
+  const roles = Array.isArray(req.userRoles) && req.userRoles.length > 0
+    ? req.userRoles
+    : (req.user?.role ? [req.user.role] : []);
+  return roles.some((r) => ['developer', 'owner', 'employee'].includes(r));
+}
+
+function isOrderOwner(req, order) {
+  const requesterId = req.user?.sub ? parseInt(req.user.sub, 10) : null;
+  const orderUserId = order?.user_id ? parseInt(order.user_id, 10) : null;
+  return requesterId && orderUserId && requesterId === orderUserId;
+}
 
 class OrderController {
 
   async createOrder(req, res) {
     try {
-      // Determine user_id from auth if not provided
-      const user_id = req.user ? req.user.id : req.body.user_id;
+      // Only accept user_id from a verified JWT (never from client input)
+      const user_id = req.user?.sub ? parseInt(req.user.sub, 10) : null;
       const orderData = { ...req.body, user_id };
 
       const order = await orderService.createOrder(orderData);
@@ -87,7 +101,12 @@ class OrderController {
       const { id } = req.params;
       const order = await orderService.getOrderById(id);
       if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
-      res.json({ success: true, data: new OrderDTO(order) });
+
+      const dto = (isStaffRequest(req) || isOrderOwner(req, order))
+        ? new OrderDTO(order)
+        : new PublicOrderDTO(order);
+
+      res.json({ success: true, data: dto });
     } catch (error) {
       logger.error('Error fetching order', error);
       res.status(500).json({ success: false, error: 'Failed to fetch order' });
@@ -119,8 +138,15 @@ class OrderController {
     try {
       const { userId } = req.params;
       // Security check
-      if (req.user && req.user.id !== parseInt(userId) && req.user.role === 'customer') {
-        return res.status(403).json({ message: 'Unauthorized to view these orders' });
+      if (req.user) {
+        const requesterId = req.user?.sub ? parseInt(req.user.sub, 10) : null;
+        const requestedId = parseInt(userId, 10);
+        if (requesterId !== requestedId) {
+          // Customers can only see their own orders; staff are handled by route RBAC.
+          if (req.user.role === 'customer') {
+            return res.status(403).json({ message: 'Unauthorized to view these orders' });
+          }
+        }
       }
       const orders = await orderService.getOrdersByUser(userId);
       res.json(orders.map(o => new OrderDTO(o)));
@@ -138,7 +164,12 @@ class OrderController {
 
       const order = await orderService.getOrderById(parseInt(normalized, 10));
       if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
-      res.json({ success: true, data: new OrderDTO(order) });
+
+      const dto = (isStaffRequest(req) || isOrderOwner(req, order))
+        ? new OrderDTO(order)
+        : new PublicOrderDTO(order);
+
+      res.json({ success: true, data: dto });
     } catch (error) {
       logger.error('Error fetching order by number', error);
       res.status(500).json({ success: false, error: 'Failed to fetch order' });
@@ -162,12 +193,17 @@ class OrderController {
       const { id } = req.params;
       const { status } = req.body;
 
-      const updatedOrder = await orderService.updateOrderStatus(id, status);
+      const result = await orderService.updateOrderStatus(id, status);
+      const updatedOrder = result.order || result; // support old/new return shapes
+      const changed = result.changed === true;
       const dto = new OrderDTO(updatedOrder);
+      const publicDto = new PublicOrderDTO(updatedOrder);
 
-      // Socket Events
+      logger.info('Order status update', { orderId: id, targetStatus: status, changed: changed });
+
+      // Socket Events only if actual change happened
       const io = req.app.get('io');
-      if (io) {
+      if (io && changed) {
         io.to(`table-${updatedOrder.table_id}`).emit('order-updated', dto);
         io.to('kitchen').emit('order-updated', dto);
         io.to('admin').emit('order-updated', dto);
@@ -180,7 +216,7 @@ class OrderController {
         io.to(`table-${updatedOrder.table_id}`).emit('order-status-update', statusPayload);
       }
 
-      res.json({ success: true, data: dto, message: 'Order status updated successfully' });
+      res.json({ success: true, data: dto, changed, message: changed ? 'Order status updated successfully' : 'No change (status already set)' });
 
     } catch (error) {
       logger.error('Error updating order status', error);

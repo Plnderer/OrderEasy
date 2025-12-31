@@ -81,14 +81,15 @@ const ReservationsSection = ({ restaurantId }) => {
                 </div>
             </div>
 
-            <div className="glass-panel overflow-hidden rounded-2xl border border-white/5">
+            <div className="glass-panel overflow-hidden rounded-2xl border border-brand-orange/50">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-white/5 text-zinc-400 text-xs uppercase font-medium">
                             <tr>
                                 <th className="px-6 py-4">Customer</th>
                                 <th className="px-6 py-4">Time</th>
-                                <th className="px-6 py-4">Party</th>
+                                <th className="px-6 py-4">Party Size</th>
+                                <th className="px-6 py-4">Party Type</th>
                                 <th className="px-6 py-4">Table</th>
                                 <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4 text-right">Actions</th>
@@ -111,6 +112,9 @@ const ReservationsSection = ({ restaurantId }) => {
                                         </td>
                                         <td className="px-6 py-4">
                                             {r.party_size} ppl
+                                        </td>
+                                        <td className="px-6 py-4 capitalize text-zinc-400">
+                                            {r.special_requests ? 'Special' : 'Standard'}
                                         </td>
                                         <td className="px-6 py-4">
                                             {r.table_number ? `T-${r.table_number}` : '-'}

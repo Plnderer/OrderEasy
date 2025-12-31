@@ -1,159 +1,67 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeftIcon,
-  MagnifyingGlassIcon,
-  StarIcon,
-  ClockIcon,
-  MapPinIcon
+  MapPinIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import Logo from '../components/Logo';
-
-import OrderEasyImg from '../assets/ordereasyrestaurant.jpeg';
-import SakuraImg from '../assets/sakurarestaurant.jpeg';
-import BellaItaliaImg from '../assets/bellaitaliarestaurant.jpeg';
-
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-
-
-/**
- * RestaurantListPage Component
- * Browse restaurants for delivery/takeout with search and filters
- * Loads data from backend API
- */
-const RestaurantListPage = () => {
+const RestaurantDetailPage = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
+  const [restaurant, setRestaurant] = useState(null);
+  const [menuPreview, setMenuPreview] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [restaurantsApi, setRestaurantsApi] = useState([]);
-  const [apiLoaded, setApiLoaded] = useState(false);
-  const [coords, setCoords] = useState(null);
-  const [nearbyOnly, setNearbyOnly] = useState(false);
-
-  // Load geolocation
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => setCoords(null),
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    }
-  }, []);
-
-  // Fetch restaurants from API
-  useEffect(() => {
-    const fetchRestaurants = async () => {
+    const load = async () => {
       try {
-        let url = `${API_URL}/api/restaurants`;
-        const params = new URLSearchParams();
-        if (coords && nearbyOnly) {
-          params.set('lat', coords.lat);
-          params.set('lng', coords.lng);
-          params.set('radius_km', '25');
-        }
-        const qs = params.toString();
-        if (qs) url += `?${qs}`;
-        const res = await fetch(url);
+        setLoading(true);
+        setError('');
+        const res = await fetch(`${API_URL}/api/restaurants/${id}`);
         const data = await res.json();
-        if (data?.success && Array.isArray(data.data)) {
+        if (!data.success) throw new Error(data.message || 'Failed to load restaurant');
+        setRestaurant(data.data);
 
-          setRestaurantsApi(data.data);
-        }
+        const resMenu = await fetch(`${API_URL}/api/restaurants/${id}/menu?available=true`);
+        const dataMenu = await resMenu.json();
+        if (dataMenu.success) setMenuPreview((dataMenu.data || []).slice(0, 6));
       } catch (e) {
-        console.error('Failed to load restaurants:', e);
+        setError(e.message || 'Failed to load restaurant');
       } finally {
-        setApiLoaded(true);
+        setLoading(false);
       }
     };
-    fetchRestaurants();
-  }, [coords, nearbyOnly]);
+    load();
+  }, [id]);
 
+  if (loading) {
+    return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-text-secondary">Loading...</div>;
+  }
+  if (error) {
+    return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-red-400">{error}</div>;
+  }
+  if (!restaurant) {
+    return <div className="min-h-screen bg-dark-bg flex items-center justify-center text-text-secondary">Not found</div>;
+  }
 
-
-
-  // Map API data to UI format
-  const restaurantsData = useMemo(() => {
-    return restaurantsApi.map((r) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description || '',
-      cuisine: r.cuisine_type || 'Cuisine',
-      rating: Number(r.rating || 0).toFixed(1),
-      deliveryTime: '',
-      distance: typeof r.distance_km === 'number' ? `${Number(r.distance_km).toFixed(1)} km` : '',
-      image:
-  r.name === 'OrderEasy Restaurant'
-    ? OrderEasyImg
-    : r.name === 'Sakura Sushi Bar'
-    ? SakuraImg
-    : r.name === 'Bella Italia'
-    ? BellaItaliaImg
-    : '',
-
-      source: 'api',
-      priceRange: '$$'
-    }));
-  }, [restaurantsApi]);
-
-  // Get unique cuisine types from restaurants for categories
-  const categories = useMemo(() => {
-    const cuisineSet = new Set(['All']);
-    restaurantsApi.forEach(r => {
-      if (r.cuisine_type) cuisineSet.add(r.cuisine_type);
-    });
-    return Array.from(cuisineSet);
-  }, [restaurantsApi]);
-
-  const filteredRestaurants = useMemo(() => {
-    let filtered = restaurantsData;
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (restaurant) =>
-          restaurant.name.toLowerCase().includes(query) ||
-          (restaurant.cuisine || '').toLowerCase().includes(query) ||
-          restaurant.description.toLowerCase().includes(query)
-      );
-    }
-
-    // Filter by category
-    if (activeCategory !== 'All') {
-      filtered = filtered.filter((restaurant) =>
-        restaurant.cuisine === activeCategory
-      );
-    }
-
-    return filtered;
-  }, [searchQuery, activeCategory, restaurantsData]);
-
-  /**
-   * Handle restaurant card click
-   */
-  const handleRestaurantClick = (restaurant) => {
-    navigate(`/restaurant/${restaurant.id}`);
-  };
-
-  /**
-   * Render star rating
-   */
-
+  // Construct image URL or use placeholder
+  const imageUrl = restaurant.cover_image_url
+    ? (restaurant.cover_image_url.startsWith('http') ? restaurant.cover_image_url : `${API_URL}${restaurant.cover_image_url}`)
+    : null;
 
   return (
-
-    <div className="min-h-screen relative overflow-hidden bg-[#000000] pt-24 pb-28">
+    <div className="min-h-screen relative overflow-hidden bg-[#000000] pt-20">
       {/* BACKGROUND GRADIENT */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `
+          backgroundImage: `
             radial-gradient(circle at center,
               #E35504ff 0%,
               #E35504aa 15%,
@@ -169,275 +77,252 @@ const RestaurantListPage = () => {
         }}
       ></div>
 
-      {/* Header integrated into page flow */}
-      <div className="container mx-auto px-4 mb-8 relative z-10">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto px-4 py-6 relative z-10">
+        <div className="flex items-center gap-4 mb-4">
           <button
-            onClick={() => navigate('/')}
-            className="text-white hover:bg-white/10 transition-colors flex items-center gap-2 px-3 py-2 rounded-full"
+            onClick={() => navigate('/restaurants')}
+            className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition text-white"
+            title="Back to Restaurants"
           >
-            <ArrowLeftIcon className="w-5 h-5" />
-            <span className="hidden sm:inline font-medium">Back</span>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
           </button>
+          <span className="text-text-secondary text-sm uppercase tracking-wider font-bold">Back to List</span>
+        </div>
+
+        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl border border-white/10 overflow-hidden shadow-xl">
+
+          {/* Hero Image with Text Overlay */}
+          <div className="relative">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={restaurant.name}
+                className="w-full h-60 object-cover object-center"
+              />
+            ) : (
+              <div className="w-full h-60 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                <span className="text-4xl">🍽️</span>
+              </div>
+            )}
 
 
+            {/* Dark gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
-          {/* NEW: CLEAN TEXT LOGO (no copa) */}
-          <div className="text-2xl sm:text-3xl font-bold">
-            <span className="text-brand-orange">Order</span>
-            <span className="text-brand-lime">Easy</span>
+            {/* Rating Badge (Top Right) */}
+            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1 border border-white/10">
+              <StarIconSolid className="w-4 h-4 text-brand-lime" />
+              <span className="text-white font-bold">{Number(restaurant.rating || 0).toFixed(1)}</span>
+            </div>
+
+            {/* Text overlay on image */}
+            <div className="absolute bottom-0 left-0 right-0 p-6">
+              <h1 className="text-4xl font-bold text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
+                {restaurant.name}
+              </h1>
+              <div className="flex flex-wrap items-center gap-4 mt-2">
+                <p className="text-white/95 text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] font-semibold bg-brand-orange/20 px-3 py-0.5 rounded-full backdrop-blur-sm border border-brand-orange/30">
+                  {restaurant.cuisine_type}
+                </p>
+              </div>
+
+              {restaurant.address && (
+                <div className="flex items-center gap-2 mt-3 text-white/90 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                  <MapPinIcon className="w-5 h-5 text-brand-lime" />
+                  <p className="text-sm font-medium">{restaurant.address}</p>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Content Section */}
+          <div className="p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              {/* Left Column: Description & Actions */}
+              <div className="lg:col-span-2 space-y-8">
+                <div className="text-center max-w-2xl mx-auto space-y-6">
+                  {restaurant.description && (
+                    <p className="text-text-primary/90 text-lg leading-relaxed">
+                      {restaurant.description}
+                    </p>
+                  )}
 
-          <div className="w-20"></div> {/* Spacer */}
-        </div>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <button
+                      onClick={() =>
+                        navigate(`/restaurant/${id}/menu`, {
+                          state: {
+                            orderType: 'browse',
+                            restaurantId: id
+                          }
+                        })
+                      }
+                      className="bg-brand-lime text-dark-bg px-8 py-3 rounded-full font-bold hover:bg-brand-lime/90 shadow-lg transition-transform hover:scale-105"
+                    >
+                      View Menu
+                    </button>
+                    <button
+                      onClick={() =>
+                        navigate(`/restaurant/${id}/menu`, {
+                          state: {
+                            orderType: 'takeout',
+                            restaurantId: id
+                          }
+                        })
+                      }
+                      className="bg-dark-surface text-text-primary px-8 py-3 rounded-full font-bold border border-dark-surface hover:border-brand-lime/70 transition-transform hover:scale-105"
+                    >
+                      Order Takeout
+                    </button>
+                    <button
+                      onClick={() => navigate(`/restaurant/${id}/reserve`)}
+                      className="bg-brand-orange text-white px-8 py-3 rounded-full font-bold hover:bg-brand-orange/90 shadow-lg transition-transform hover:scale-105"
+                    >
+                      Reserve a Table
+                    </button>
+                  </div>
+                </div>
 
-        <div className="text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">
-            Browse Restaurants
-          </h1>
-          <p className="text-white/90">
-            {filteredRestaurants.length} restaurant{filteredRestaurants.length !== 1 ? 's' : ''} available
-          </p>
-        </div>
-      </div>
+                {/* Map Section */}
+                <div className="w-full h-[400px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative group">
+                  <div className="absolute inset-0 bg-dark-bg/50 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity z-10">
+                    <span className="text-white/50 font-medium flex items-center gap-2">
+                      Interact with Map
+                    </span>
+                  </div>
+                  <iframe
+                    title="Restaurant Location"
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    style={{ border: 0, filter: 'invert(90%) hue-rotate(180deg) contrast(85%)' }}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(restaurant.address || 'Restaurant')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: Info Card */}
+              <div className="bg-white/5 rounded-2xl p-5 border border-white/10 space-y-4 h-fit">
+                <h3 className="text-xl font-bold text-white mb-2">Information</h3>
+
+                {/* Contact */}
+                <div className="space-y-3">
+                  {restaurant.phone && (
+                    <div className="flex items-center gap-3 text-text-secondary">
+                      <PhoneIcon className="w-5 h-5 text-brand-lime" />
+                      <span>{restaurant.phone}</span>
+                    </div>
+                  )}
+                  {restaurant.email && (
+                    <div className="flex items-center gap-3 text-text-secondary">
+                      <EnvelopeIcon className="w-5 h-5 text-brand-lime" />
+                      <span className="break-all">{restaurant.email}</span>
+                    </div>
+                  )}
+                </div>
+
+                <hr className="border-white/10 my-4" />
+
+                {/* Hours */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3 text-white">
+                    <ClockIcon className="w-5 h-5 text-brand-lime" />
+                    <span className="font-bold">Opening Hours</span>
+                  </div>
+                  <div className="space-y-1 text-sm text-text-secondary">
+                    {restaurant.opening_hours ? (
+                      (() => {
+                        const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+                        let hoursEntries = [];
+                        if (typeof restaurant.opening_hours === 'object') {
+                          hoursEntries = Object.entries(restaurant.opening_hours).sort(
+                            ([a], [b]) => daysOrder.indexOf(a) - daysOrder.indexOf(b)
+                          );
+                        } else {
+                          // Fallback for simple string
+                          return <span>{String(restaurant.opening_hours)}</span>;
+                        }
+
+                        return (
+                          <div className="grid gap-1.5 mt-2">
+                            {hoursEntries.map(([day, hours]) => {
+                              const isToday = day === today;
+                              return (
+                                <div
+                                  key={day}
+                                  className={`flex justify-between items-center text-sm p-2 rounded-lg transition-colors ${isToday ? 'bg-brand-lime/10 border border-brand-lime/20' : 'hover:bg-white/5'
+                                    }`}
+                                >
+                                  <span className={`capitalize font-medium ${isToday ? 'text-brand-lime' : 'text-text-secondary'}`}>
+                                    {day} {isToday && <span className="text-xs ml-1 opacity-70">(Today)</span>}
+                                  </span>
+                                  <span className={`font-medium ${isToday ? 'text-white' : 'text-white/80'}`}>
+                                    {typeof hours === 'object' && hours !== null
+                                      ? `${hours.open} - ${hours.close}`
+                                      : hours}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <span className="italic opacity-60">Hours not available</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 relative z-10">
-        {/* Search Bar */}
-        <div className="max-w-2xl mx-auto mb-8">
-          <div className="relative">
+            {menuPreview.length > 0 && (
+              <div className="mt-8 pt-8 border-t border-white/10">
+                <h2 className="text-2xl font-bold text-text-primary mb-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+                  Popular Items
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {menuPreview.map((item) => (
+                    <div
+                      key={item.id}
+                      className="
+                      bg-white/10
+                      backdrop-blur-xl
+                      border border-white/20
+                      rounded-2xl
+                      p-4
+                      shadow-sm shadow-black/30
+                      hover:bg-white/15
+                      hover:border-brand-lime/40
+                      transition-all
+                    "
+                    >
 
-            <MagnifyingGlassIcon
-              className="
-              absolute left-4 top-1/2 -translate-y-1/2
-              w-6 h-6
-              text-[#B7EC2F]
-              drop-shadow-[0_0_6px_rgba(255,183,146,0.8)]
-              z-20
-            "
-              strokeWidth={2.5}
-            />
-
-            <input
-              type="text"
-              placeholder="Discover places, menus and cuisines"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="
-              w-full
-              bg-white/10 backdrop-blur-md
-              text-white
-              border border-white/20
-              focus:border-brand-lime
-              rounded-2xl
-              pl-12 pr-6 py-4
-              outline-none
-              transition-all
-              text-lg
-              placeholder:text-white/60
-                          "
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-text-secondary hover:text-brand-orange transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-text-primary">{item.name}</h3>
+                        <span className="text-brand-lime font-bold text-lg">${Number(item.price).toFixed(2)}</span>
+                      </div>
+                      <p className="text-text-primary/80 text-sm mt-2 line-clamp-2">{item.description}</p>
+                      {item.category && (
+                        <span className="inline-block mt-3 bg-brand-orange/10 text-brand-orange text-xs px-3 py-1 rounded-full font-semibold">
+                          {item.category}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Category Filters */}
-        <div className="mb-8 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-3 pb-2 min-w-max px-1">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={`
-                  px-6 py-3 rounded-full font-semibold text-sm
-                  transition-all duration-200
-                  whitespace-nowrap
-                  ${activeCategory === category
-                    ? 'bg-brand-lime text-black font-bold shadow-[0_0_20px_#B5FF0088] border border-brand-lime/80'
-                    : 'bg-white/10 backdrop-blur-md text-white/80 border border-white/20 hover:bg-white/20 hover:text-white'
-
-                  }
-                `}
-              >
-                {category}
-              </button>
-            ))}
-            <button
-              onClick={() => setNearbyOnly((v) => !v)}
-              className={`px-6 py-3 rounded-full font-semibold text-sm transition-all whitespace-nowrap border ${nearbyOnly
-                ? 'bg-brand-lime text-black font-bold shadow-[0_0_20px_#B5FF0088] border border-brand-lime/80'
-                : 'bg-white/10 backdrop-blur-md text-white/80 border border-white/20 hover:bg-white/20 hover:text-white'
-                }`}
-              title={coords ? 'Filter within 25 km' : 'Enable location to filter nearby'}
-            >
-              Near Me
-            </button>
-          </div>
-        </div>
-
-        {/* Results Info */}
-        {searchQuery && (
-          <div className="mb-6">
-            <p className="text-text-secondary text-center">
-              Found {filteredRestaurants.length} result{filteredRestaurants.length !== 1 ? 's' : ''} for "{searchQuery}"
-            </p>
-          </div>
-        )}
-
-        {/* Restaurant Grid */}
-        {!apiLoaded ? (
-          // Loading State
-          <div className="max-w-2xl mx-auto bg-dark-card rounded-3xl p-12 text-center border border-dark-surface">
-            <div className="text-7xl mb-4 animate-pulse">🍽️</div>
-            <h3 className="text-2xl font-bold text-text-primary mb-2">
-              Loading Restaurants...
-            </h3>
-            <p className="text-text-secondary">
-              Please wait while we fetch the latest data
-            </p>
-          </div>
-        ) : filteredRestaurants.length === 0 ? (
-          // Empty State
-          <div className="max-w-2xl mx-auto bg-dark-card rounded-3xl p-12 text-center border border-dark-surface">
-            <div className="text-7xl mb-4">🔍</div>
-            <h3 className="text-2xl font-bold text-text-primary mb-2">
-              No Restaurants Found
-            </h3>
-            <p className="text-text-secondary mb-6">
-              {restaurantsApi.length === 0
-                ? 'No restaurants available in the database. Please add some restaurants first.'
-                : 'Try adjusting your search or filters'}
-            </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setActiveCategory('All');
-              }}
-              className="bg-brand-lime text-dark-bg px-6 py-3 rounded-full font-['Lora'] font-bold hover:bg-brand-lime/90 transition-all"
-              style={{ fontSize: '17px' }}
-            >
-              Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRestaurants.map((restaurant) => (
-              <div
-                key={restaurant.id}
-                onClick={() => handleRestaurantClick(restaurant)}
-                className="
-                  bg-white/10 backdrop-blur-xl border border-white/20
-                  border border-dark-surface
-                  hover:border-brand-lime/50
-                  transition-all duration-300
-                  transform hover:-translate-y-2
-                  hover:shadow-2xl hover:shadow-brand-lime/20
-                  cursor-pointer
-                  group
-                "
-              >
-                {/* Image Section */}
-                <div className="relative h-48 w-full overflow-hidden rounded-t-xl">
-                  <img
-        src={restaurant.image}
-        alt={restaurant.name}
-        className="w-full h-full object-cover object-top transform group-hover:scale-110 transition-transform duration-300"
-      />
-
-<div className="absolute bottom-0 left-0 w-full h-28 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
-
-
-
-                  {/* Distance badge (when Near Me filter used) */}
-                  {restaurant.distance && (
-                    <div className="absolute top-3 left-3 bg-dark-card/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-text-primary">
-                      {restaurant.distance}
-                    </div>
-                  )}
-
-                  {/* Rating badge */}
-                  <div className="absolute top-3 right-3 bg-dark-card/90 backdrop-blur-sm px-3 py-2 rounded-full flex items-center gap-1">
-                    <StarIconSolid className="w-4 h-4 text-brand-lime" />
-                    <span className="text-text-primary font-semibold text-sm">
-                      {restaurant.rating}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content Section */}
-                <div className="p-6">
-                  {/* Name & Price Range */}
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-xl font-bold text-text-primary group-hover:text-brand-lime transition-colors">
-                      {restaurant.name}
-                    </h3>
-                    <span className="text-text-secondary font-semibold text-sm">
-                      {restaurant.priceRange}
-                    </span>
-                  </div>
-
-                  {/* Description */}
-                  <p className="text-text-secondary text-sm mb-3 line-clamp-2">
-                    {restaurant.description}
-                  </p>
-
-                  {/* Cuisine Badge */}
-                  <div className="mb-4">
-                    <span className="inline-block bg-brand-orange/10 text-brand-orange px-3 py-1 rounded-full text-xs font-semibold">
-                      {restaurant.cuisine}
-                    </span>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="flex items-center gap-4 text-sm text-text-secondary mb-4">
-                    <div className="flex items-center gap-1">
-                      <ClockIcon className="w-4 h-4" />
-                      <span>{restaurant.deliveryTime}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MapPinIcon className="w-4 h-4" />
-                    </div>
-                  </div>
-
-                  {/* View Details Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/restaurant/${restaurant.id}`);
-                    }}
-                    className="
-                      w-full
-                      bg-brand-lime text-dark-bg
-                      px-6 py-3 rounded-full
-                      font-bold
-                      hover:bg-brand-lime/90
-                      transform group-hover:scale-105
-                      transition-all duration-200
-                      shadow-lg shadow-brand-lime/20
-                    "
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
       </div>
-    </div >
+    </div>
   );
 };
 
-export default RestaurantListPage; 
+export default RestaurantDetailPage;

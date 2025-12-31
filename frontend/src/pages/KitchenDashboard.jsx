@@ -6,11 +6,12 @@ import { useUserAuth } from '../hooks/useUserAuth';
 import OrderCard from '../components/OrderCard';
 import Logo from '../components/Logo';
 import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
-import yukonImage from '../assets/yukon.png';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
 import { fetchActiveOrders } from '../api/orders';
 import YukonAssistant from '../components/YukonAssistant';
+import KitchenBg from '../assets/kitchen-bg.png';
+
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -126,29 +127,25 @@ const KitchenDashboard = () => {
   const handleOrderUpdated = useCallback((updatedOrder) => {
 
 
+    const uid = String(updatedOrder.id);
 
     setOrders((prevOrders) => {
       // If order is completed or cancelled, remove it from active orders
       if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
-        return prevOrders.filter((order) => order.id !== updatedOrder.id);
+        return prevOrders.filter((order) => String(order.id) !== uid);
       }
 
-
       // Otherwise, update the order in the list
-      const orderIndex = prevOrders.findIndex(
-        (order) => order.id === updatedOrder.id
-      );
-
+      const orderIndex = prevOrders.findIndex((order) => String(order.id) === uid);
 
       if (orderIndex !== -1) {
         const newOrders = [...prevOrders];
-        newOrders[orderIndex] = updatedOrder;
+        newOrders[orderIndex] = { ...newOrders[orderIndex], ...updatedOrder };
         return newOrders;
       }
 
-
       // If order doesn't exist but is active, add it
-      return [updatedOrder, ...prevOrders];
+      return [{ ...updatedOrder, id: isNaN(Number(updatedOrder.id)) ? updatedOrder.id : Number(updatedOrder.id) }, ...prevOrders];
     });
   }, []);
 
@@ -159,19 +156,34 @@ const KitchenDashboard = () => {
 
 
   // Handle status update from OrderCard (optimistic update)
+  // Returns true if we modified local state, false otherwise
   const handleStatusUpdate = (updatedOrder) => {
+    let modified = false;
+    const uid = String(updatedOrder.id);
+
     setOrders((prevOrders) => {
       // If order is completed or cancelled, remove it
       if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
-        return prevOrders.filter((order) => order.id !== updatedOrder.id);
+        const filtered = prevOrders.filter((order) => String(order.id) !== uid);
+        modified = filtered.length !== prevOrders.length;
+        return filtered;
       }
 
+      // Update the order if present
+      const foundIndex = prevOrders.findIndex((order) => String(order.id) === uid);
+      if (foundIndex !== -1) {
+        modified = true;
+        const newOrders = [...prevOrders];
+        newOrders[foundIndex] = { ...newOrders[foundIndex], ...updatedOrder };
+        return newOrders;
+      }
 
-      // Update the order
-      return prevOrders.map((order) =>
-        order.id === updatedOrder.id ? updatedOrder : order
-      );
+      // If not found, prepend it (active order)
+      modified = true;
+      return [{ ...updatedOrder, id: isNaN(Number(updatedOrder.id)) ? updatedOrder.id : Number(updatedOrder.id) }, ...prevOrders];
     });
+
+    return modified;
   };
 
 
@@ -400,7 +412,6 @@ const KitchenDashboard = () => {
     { category: 'Silver-Ware', item: 'Steak Knives', unit: 'pieces', quantity: 150 },
     { category: 'Silver-Ware', item: 'Salad Forks', unit: 'pieces', quantity: 100 },
   ]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleInventoryQuantityChange = (itemName, newQuantity) => {
     setInventory((prev) =>
@@ -429,30 +440,38 @@ const KitchenDashboard = () => {
 
 
   return (
+    
     <div className="h-full relative overflow-y-auto bg-[#000000]">
-      {/* BACKGROUND GRADIENT */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background: `
-            radial-gradient(circle at center,
-              #E35504ff 0%,
-              #E35504aa 15%,
-              #000000 35%,
-              #5F2F14aa 55%,
-              #B5FF00ff 80%,
-              #000000 100%
-            )
-          `,
-          filter: "blur(40px)",
-          backgroundSize: "180% 180%",
-          opacity: 0.55,
-        }}
-      ></div>
+      {/* CLEAN DARK BACKGROUND */}
+<div
+  className="fixed inset-0 pointer-events-none"
+  style={{
+    backgroundImage: `url(${KitchenBg})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    opacity: 0.35, 
+    filter: "blur(6px)", 
+  }}
+></div>
+
+
+
+<div
+  className="fixed inset-0 pointer-events-none opacity-20"
+  style={{
+    background: `
+      radial-gradient(circle at 50% 110%, rgba(181,255,0,0.15), transparent 70%)
+    `,
+    filter: "blur(60px)",
+  }}
+></div>
+
+
 
 
       {/* Header */}
-      <header className="glass-panel sticky top-0 z-20 border-b border-white/10 shadow-2xl backdrop-blur-xl">
+     <header className="sticky top-0 z-20 bg-[#E5E5E5]/20 backdrop-blur-xl border-b border-white/20 shadow-lg">
+
         <div className="container mx-auto px-6 py-3">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-4">
@@ -582,6 +601,7 @@ const KitchenDashboard = () => {
 
       {/* == END SIDEBAR == */}
 
+      {/* Inventory logging handler passed to Yukon for text-based commands */}
       <YukonAssistant
         contextData={{
           orders: orders,
@@ -593,6 +613,27 @@ const KitchenDashboard = () => {
             preparing: orderCounts.preparing,
             ready: orderCounts.ready,
             occupancy: totalOccupancy
+          }
+        }}
+        onInventoryLog={(itemName, qty) => {
+          // Try to find an existing item (case-insensitive match)
+          setInventory((prev) => {
+            const idx = prev.findIndex(i => i.item.toLowerCase() === itemName.toLowerCase());
+            if (idx !== -1) {
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], quantity: Number(updated[idx].quantity || 0) + Number(qty) };
+              return updated;
+            }
+            // Add new item if not found
+            return [{ category: 'Misc', item: itemName, unit: 'units', quantity: Number(qty) }, ...prev];
+          });
+        }}
+        onOrderUpdated={(updatedOrder) => {
+          // Reuse existing handler to update order state (handles removal on completion/cancel)
+          const applied = handleStatusUpdate(updatedOrder);
+          // If local state wasn't changed (odd case), refetch to ensure UI sync
+          if (!applied) {
+            fetchActiveOrdersFromApi().catch(() => console.warn('Failed to refresh orders after Yukon update'));
           }
         }}
       />
@@ -634,7 +675,8 @@ const KitchenDashboard = () => {
 
         {/* Yukon hero header */}
         {/* Quick Action Hero Section */}
-        <div className="glass-panel rounded-3xl p-6 mb-8 mt-2">
+       <div className="p-6 mb-8 mt-2">
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button
               onClick={() => setActivePanel('inventory')}
@@ -888,11 +930,12 @@ const KitchenDashboard = () => {
 
                 <div className="flex-1 flex items-end justify-center gap-6">
                   {[
-                    { label: 'Total', value: totalOrders, color: 'bg-white' },
-                    { label: 'Pending', value: totalPending, color: 'bg-yellow-400' },
-                    { label: 'Preparing', value: totalPreparing, color: 'bg-amber-300' },
-                    { label: 'Ready', value: totalReady, color: 'bg-green-400' },
-                    { label: 'Completed', value: totalCompleted, color: 'bg-emerald-400' },
+                    { label: 'Total', value: totalOrders, color: 'bg-white/80' },
+                    { label: 'Pending', value: totalPending, color: 'bg-[#FA6C01]' },
+                    { label: 'Preparing', value: totalPreparing, color: 'bg-[#FFA500]' },
+                    { label: 'Ready', value: totalReady, color: 'bg-[#B7EC2F]' },
+                    { label: 'Completed', value: totalCompleted, color: 'bg-[#5BE37E]' },
+
                   ].map((entry) => {
                     const maxVal =
                       Math.max(
@@ -933,7 +976,7 @@ const KitchenDashboard = () => {
                 <div className="mt-6 bg-dark-card/80 rounded-2xl px-5 py-4 border border-yellow-400/40 shadow-xl max-w-xl">
                   <ul className="text-sm space-y-2">
                     <li>
-                      <span className="font-semibold text-brand-orange">Total Orders:</span>{' '}
+                      <span className="font-semibold text-white">Total Orders:</span>{' '}
                       {totalOrders}
                     </li>
                     <li>
@@ -945,7 +988,7 @@ const KitchenDashboard = () => {
                       {totalPreparing}
                     </li>
                     <li>
-                      <span className="font-semibold text-green-500">Ready:</span>{' '}
+                      <span className="font-semibold text-brand-lime">Ready:</span>{' '}
                       {totalReady}
                     </li>
                     <li>
@@ -953,7 +996,7 @@ const KitchenDashboard = () => {
                       {totalCompleted}
                     </li>
                     <li className="pt-2 border-t border-dark-surface">
-                      <span className="font-semibold text-brand-lime">Avg Prep Time:</span>{' '}
+                      <span className="font-semibold text-blue-500">Avg Prep Time:</span>{' '}
                       {avgPreparingTime === '-' ? 'N/A' : avgPreparingTime + ' min'}
                     </li>
                   </ul>
@@ -984,7 +1027,7 @@ const KitchenDashboard = () => {
                                   ? '#facc15' // yellow
                                   : '#22c55e', // green
                             textColor: '#ffffff',
-                            trailColor: '#111827',
+                            trailColor: '#0003A2',
                           })}
                         />
                       </div>
@@ -1157,5 +1200,6 @@ const KitchenDashboard = () => {
   );
 };
 
+//Beta changes 12.11.25
 
 export default KitchenDashboard;
