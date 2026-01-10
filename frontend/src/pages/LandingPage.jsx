@@ -3,7 +3,7 @@ import {
   QrCodeIcon,
   BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
-import orderEasyLogo from '../assets/order-easy-logo-transparent-2.png';
+
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -39,17 +39,7 @@ const LandingPage = () => {
 
       ></div>
 
-      {/* LOGO OFICIAL */}
-      <div className="relative z-10 mb-10">
-        <img
-          src={orderEasyLogo}
-          alt="OrderEasy Logo"
-          className="w-64 h-auto mx-auto
-      drop-shadow-[0_0_25px_rgba(0,0,0,0.45)]
-      hover:scale-105 transition-transform duration-300
-    "
-        />
-      </div>
+
 
       {/* Tagline */}
       <h1 className="text-2xl sm:text-3xl lg:text-4xl font-light text-center mb-16 text-text-primary/90 italic leading-relaxed">
