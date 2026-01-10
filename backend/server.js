@@ -19,6 +19,9 @@ const cleanupJob = require('./jobs/cleanup-reservations');
 
 // Initialize Express app
 const app = express();
+// ✅ REQUIRED for Render + express-rate-limit
+app.set("trust proxy", 1);
+
 let server; // created per-attempt to allow safe retries
 let io;     // Socket.IO instance bound to the current server
 
@@ -50,18 +53,40 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(compression());
+
+// Temp debug logging for Origin
+app.use((req, _res, next) => {
+  console.log("REQ", req.method, req.path, "Origin:", req.headers.origin);
+  next();
+});
+
+// CORS Configuration
+const allowedOrigins = new Set([
+  "https://order-easy-omega.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+]);
+
+// Optional: allow ALL Vercel preview URLs for this project
+const allowedOriginRegex = [
+  /^https:\/\/order-easy-omega(-[a-z0-9-]+)?\.vercel\.app$/i,
+];
+
+function isAllowed(origin) {
+  if (!origin) return true; // ✅ allow undefined origins (health checks, direct hits, postman)
+  if (allowedOrigins.has(origin)) return true;
+  return allowedOriginRegex.some((re) => re.test(origin));
+}
+
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'];
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('localhost')) {
-      return callback(null, true);
-    }
-    return callback(new Error('CORS Error: Origin not allowed'), false);
-  },
-  credentials: true
+  origin: (origin, cb) => cb(null, isAllowed(origin)),
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false, // keep false unless you're using cookies
 }));
+
+app.options("*", cors()); // ✅ handle preflight
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
